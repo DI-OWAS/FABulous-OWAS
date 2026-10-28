@@ -144,8 +144,11 @@ def generateTile(
             writer.addComment(str(side_of_port), onNewLine=True)
         # destination port are input to the tile
         # source port are output of the tile
-        wireSize = (abs(port.x_offset) + abs(port.y_offset)) * port.wire_count - 1
-        writer.addPortVector(port.name, port.io_direction, wireSize, indentLevel=2)
+        if port.is_scalar:
+            writer.addPortScalar(port.name, port.io_direction, indentLevel=2)
+        else:
+            wireSize = (abs(port.x_offset) + abs(port.y_offset)) * port.wire_count - 1
+            writer.addPortVector(port.name, port.io_direction, wireSize, indentLevel=2)
         writer.addComment(str(port), indentLevel=2, onNewLine=False)
 
     # SJUMP ports: OUTPUT exits toward supertile SM; INPUT enters from supertile SM
@@ -697,10 +700,15 @@ def generateSuperTile(
                 indentLevel=1,
             )
             for p in pList:
-                wire = (abs(p.x_offset) + abs(p.y_offset)) * p.wire_count - 1
-                writer.addPortVector(
-                    f"Tile_X{x}Y{y}_{p.name}", p.io_direction, wire, indentLevel=2
-                )
+                if p.is_scalar:
+                    writer.addPortScalar(
+                        f"Tile_X{x}Y{y}_{p.name}", p.io_direction, indentLevel=2
+                    )
+                else:
+                    wire = (abs(p.x_offset) + abs(p.y_offset)) * p.wire_count - 1
+                    writer.addPortVector(
+                        f"Tile_X{x}Y{y}_{p.name}", p.io_direction, wire, indentLevel=2
+                    )
                 writer.addComment(str(p), onNewLine=False)
 
     # add tile external bel port
@@ -867,10 +875,15 @@ def generateSuperTile(
             writer.addComment(f"Tile_X{x}Y{y}_{i[0].wire_direction}", onNewLine=True)
             for p in i:
                 if p.is_output:
-                    wire = (abs(p.x_offset) + abs(p.y_offset)) * p.wire_count - 1
-                    writer.addConnectionVector(
-                        f"Tile_X{x}Y{y}_{p.name}", wire, indentLevel=1
-                    )
+                    if p.is_scalar:
+                        writer.addConnectionScalar(
+                            f"Tile_X{x}Y{y}_{p.name}", indentLevel=1
+                        )
+                    else:
+                        wire = (abs(p.x_offset) + abs(p.y_offset)) * p.wire_count - 1
+                        writer.addConnectionVector(
+                            f"Tile_X{x}Y{y}_{p.name}", wire, indentLevel=1
+                        )
                     writer.addComment(str(p), onNewLine=False)
 
     # declare internal connections for frameData, frameStrobe, and UserCLK

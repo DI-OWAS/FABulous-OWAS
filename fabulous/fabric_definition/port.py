@@ -314,6 +314,20 @@ class TilePort(Port):
         """Wire count (backward compatibility)."""
         return self._wire_count
 
+    @property
+    def is_scalar(self) -> bool:
+        """Whether the wire is a single bit at the tile boundary.
+
+        A NORTH/EAST/SOUTH/WEST wire with one wire spanning one tile is declared
+        as a scalar port (`Ci`, not `Ci[0:0]`), since other tools and the GDS pin
+        configuration treat one-bit pins as scalars. JUMP and SJUMP wires keep
+        their vector form.
+        """
+        return (
+            self.wire_direction not in (Direction.JUMP, Direction.SJUMP)
+            and (abs(self.x_offset) + abs(self.y_offset)) * self.wire_count == 1
+        )
+
     def __repr__(self) -> str:
         """Return a string representation of the TilePort."""
         name = f"{self.side_of_tile}"
@@ -373,9 +387,7 @@ class TilePort(Port):
         str
             A regex expression matching the port's wire names.
         """
-        total_wires = (abs(self.x_offset) + abs(self.y_offset)) * self.wire_count
-
-        if total_wires == 1 and not self.name_is_null:
+        if self.is_scalar and not self.name_is_null:
             return f"{prefix}{self.name}"
         if indexed:
             return rf"{prefix}{self.name}\[\d+\]"
@@ -418,6 +430,10 @@ class TilePort(Port):
             return [
                 f"{prefix}{self.name}{i}" for i in range(count) if not self.name_is_null
             ]
+
+        if self.is_scalar:
+            # Declared as a scalar port, so there is no bit to select.
+            return [] if self.name_is_null else [f"{prefix}{self.name}"]
 
         if escape:
             return [
@@ -473,6 +489,10 @@ class TilePort(Port):
                 for i in range(startIndex, total_wires)
                 if not self.name_is_null
             ]
+
+        if self.is_scalar:
+            # Declared as a scalar port, so there is no bit to select.
+            return [] if self.name_is_null else [f"{prefix}{self.name}"]
 
         if escape:
             return [

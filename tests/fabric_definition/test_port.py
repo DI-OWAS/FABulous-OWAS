@@ -4,6 +4,7 @@ import pytest
 
 from fabulous.fabric_definition.define import (
     IO,
+    Direction,
     FeatureType,
     FeatureValue,
     Side,
@@ -362,3 +363,63 @@ class TestTilePort:
             name="n", io_direction=IO.OUTPUT, width=1, side_of_tile=Side.NORTH
         )
         assert port.tile is None
+
+
+def _wire_port(
+    direction: Direction, x_offset: int, y_offset: int, wire_count: int
+) -> TilePort:
+    """Build an output routing-wire port `Co` with the given geometry."""
+    return TilePort(
+        name="Co",
+        io_direction=IO.OUTPUT,
+        width=wire_count,
+        side_of_tile=Side.NORTH,
+        wire_direction=direction,
+        source_name="Co",
+        x_offset=x_offset,
+        y_offset=y_offset,
+        destination_name="Ci",
+        wire_count=wire_count,
+    )
+
+
+class TestTilePortScalar:
+    """A one-wire routing port spanning one tile is a scalar tile port."""
+
+    @pytest.mark.parametrize(
+        ("direction", "x_offset", "y_offset", "wire_count", "expected"),
+        [
+            (Direction.NORTH, 0, -1, 1, True),
+            (Direction.SOUTH, 0, 1, 1, True),
+            (Direction.EAST, 1, 0, 1, True),
+            (Direction.WEST, -1, 0, 1, True),
+            (Direction.NORTH, 0, -1, 4, False),
+            (Direction.NORTH, 0, -4, 1, False),
+            (Direction.JUMP, 0, 0, 1, False),
+            (Direction.SJUMP, 0, 0, 1, False),
+        ],
+    )
+    def test_is_scalar(
+        self,
+        direction: Direction,
+        x_offset: int,
+        y_offset: int,
+        wire_count: int,
+        expected: bool,
+    ) -> None:
+        port = _wire_port(direction, x_offset, y_offset, wire_count)
+        assert port.is_scalar is expected
+
+    def test_scalar_names_have_no_index(self) -> None:
+        """Signal names drop the bit select; switch-matrix pin names keep `Co0`."""
+        port = _wire_port(Direction.NORTH, 0, -1, 1)
+        assert port.expand_port_info_by_name() == ["Co0"]
+        assert port.expand_port_info_by_name(indexed=True) == ["Co"]
+        assert port.expand_port_info_by_name(indexed=True, escape=True) == ["Co"]
+        assert port.expand_port_info_by_name_top(indexed=True) == ["Co"]
+        assert port.get_port_regex(indexed=True) == "Co"
+
+    def test_vector_names_keep_index(self) -> None:
+        port = _wire_port(Direction.NORTH, 0, -1, 2)
+        assert port.expand_port_info_by_name(indexed=True) == ["Co[0]", "Co[1]"]
+        assert port.get_port_regex(indexed=True) == r"Co\[\d+\]"
