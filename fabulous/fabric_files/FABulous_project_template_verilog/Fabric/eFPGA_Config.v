@@ -19,7 +19,9 @@ module eFPGA_Config #(
     input wire SPI_CS_N,
     input wire SPI_MOSI,
     output wire SPI_MISO,
-    // Serial configuration status
+    // Configuration status: ComActive is high during a serial or bitbang
+    // session; ReceiveLED is the UART LED, XORed with a toggle per word
+    // written over bitbang (and SPI); in SPI mode SPI_MISO is ConfigDone
     output wire ComActive,
     output wire ReceiveLED,
     // BitBang configuration port
@@ -41,6 +43,9 @@ module eFPGA_Config #(
     wire Serial_WriteStrobe_Mux;
     wire Serial_Active;
     wire Serial_LED;
+    wire LED_WriteStrobe;
+    reg  WriteToggle;
+    wire ConfigDone;
 
     wire [31:0] BitBangWriteData;
     wire BitBangWriteStrobe;
@@ -63,7 +68,9 @@ module eFPGA_Config #(
                 .sclk_i(SPI_SCLK),
                 .cs_ni(SPI_CS_N),
                 .mosi_i(SPI_MOSI),
-                .miso_o(SPI_MISO)
+                /* verilator lint_off PINCONNECTEMPTY */
+                .miso_o()  // constant 0; SPI_MISO reports ConfigDone instead
+                /* verilator lint_on PINCONNECTEMPTY */
             );
 
             // Same two-flop sync as inside the receiver, so a transfer is
@@ -77,7 +84,11 @@ module eFPGA_Config #(
                 end
             end
             assign Serial_Active = !SPI_CS_N_sync[1];
-            assign Serial_LED = Serial_Active;
+            assign Serial_LED = 1'b0;
+            assign LED_WriteStrobe = Serial_WriteStrobe || BitBangWriteStrobe;
+            // Readable as a status pin once CS is released; cleared when the
+            // next transfer starts
+            assign SPI_MISO = ConfigDone;
         end else begin : g_uart
             wire [7:0] Command;
 
@@ -91,6 +102,7 @@ module eFPGA_Config #(
                 .Command(Command),
                 .ReceiveLED(Serial_LED)
             );
+            assign LED_WriteStrobe = BitBangWriteStrobe;
             assign SPI_MISO = 1'b0;
         end
     endgenerate
@@ -119,8 +131,17 @@ module eFPGA_Config #(
 
     assign fsm_reset = Serial_Active || BitBangActive;
 
-    assign ComActive = Serial_Active;
-    assign ReceiveLED = Serial_LED ^ BitBangWriteStrobe;
+    assign ComActive = fsm_reset;
+
+    // A one-cycle strobe never shows on a LED; a toggle per word does
+    always @(posedge CLK, negedge resetn) begin
+        if (!resetn) begin
+            WriteToggle <= 1'b0;
+        end else if (LED_WriteStrobe) begin
+            WriteToggle <= ~WriteToggle;
+        end
+    end
+    assign ReceiveLED = Serial_LED ^ WriteToggle;
 
     ConfigFSM #(
         .NumberOfRows(NumberOfRows),
@@ -135,7 +156,8 @@ module eFPGA_Config #(
         .fsm_reset(fsm_reset),
         .frame_address_register(FrameAddressRegister),
         .long_frame_strobe(LongFrameStrobe),
-        .row_select(RowSelect)
+        .row_select(RowSelect),
+        .config_done(ConfigDone)
     );
 
 endmodule

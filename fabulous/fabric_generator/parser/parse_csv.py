@@ -954,6 +954,7 @@ def parseFabricCSV(fileName: str) -> Fabric:
     multiClkDomains = False
     includeBorderRows = False
     config_interface = ConfigInterface.UART
+    minimal_config_ports = False
 
     for i in parameters:
         raw_fields = [value.strip() for value in i.split(",")]
@@ -1050,6 +1051,13 @@ def parseFabricCSV(fileName: str) -> Fabric:
                     f"Valid options are {', '.join(ConfigInterface.__members__)}."
                 )
             config_interface = ConfigInterface(i[1])
+        elif i[0].startswith("MinimalConfigPorts"):
+            if i[1] not in ("TRUE", "FALSE"):
+                raise InvalidFabricParameter(
+                    f"Invalid MinimalConfigPorts {i[1]} in parameters. "
+                    "Valid options are TRUE and FALSE."
+                )
+            minimal_config_ports = i[1] == "TRUE"
         elif i[0].startswith("PreserveListOrder"):
             # Consumed and validated by the pre-scan above (it must be known
             # before any tile is parsed); accepted here so it is not rejected.
@@ -1122,6 +1130,7 @@ def parseFabricCSV(fileName: str) -> Fabric:
         multiClkDomains=multiClkDomains,
         includeBorderRows=includeBorderRows,
         config_interface=config_interface,
+        minimal_config_ports=minimal_config_ports,
         tileDic=tileDic,
         superTileDic=superTileDic,
         unusedTileDic=unusedTileDic,

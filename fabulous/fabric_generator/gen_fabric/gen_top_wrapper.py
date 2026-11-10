@@ -34,6 +34,11 @@ def generateTopWrapper(writer: CodeGenerator, fabric: Fabric) -> None:
             "ConfigInterface SPI is only supported for Verilog fabrics: the VHDL "
             "eFPGA_Config has no SPI receiver."
         )
+    minimal_ports = fabric.minimal_config_ports
+    if minimal_ports and isinstance(writer, VHDLCodeGenerator):
+        raise InvalidFabricParameter(
+            "MinimalConfigPorts is only supported for Verilog fabrics."
+        )
 
     def split_port(p: str) -> tuple[tuple[int, int], tuple[int, ...], str]:
         """Parse and split a port name into components for sorting and grouping.
@@ -168,10 +173,11 @@ def generateTopWrapper(writer: CodeGenerator, fabric: Fabric) -> None:
     writer.addComment("Config related ports", onNewLine=True, indentLevel=2)
     writer.addPortScalar("CLK", IO.INPUT, indentLevel=2)
     writer.addPortScalar("resetn", IO.INPUT, indentLevel=2)
-    writer.addPortScalar("SelfWriteStrobe", IO.INPUT, indentLevel=2)
-    writer.addPortVector(
-        "SelfWriteData", IO.INPUT, fabric.frameBitsPerRow - 1, indentLevel=2
-    )
+    if not minimal_ports:
+        writer.addPortScalar("SelfWriteStrobe", IO.INPUT, indentLevel=2)
+        writer.addPortVector(
+            "SelfWriteData", IO.INPUT, fabric.frameBitsPerRow - 1, indentLevel=2
+        )
     if spi_config:
         writer.addPortScalar("SPI_SCLK", IO.INPUT, indentLevel=2)
         writer.addPortScalar("SPI_CS_N", IO.INPUT, indentLevel=2)
@@ -179,8 +185,9 @@ def generateTopWrapper(writer: CodeGenerator, fabric: Fabric) -> None:
         writer.addPortScalar("SPI_MISO", IO.OUTPUT, indentLevel=2)
     else:
         writer.addPortScalar("Rx", IO.INPUT, indentLevel=2)
-    writer.addPortScalar("ComActive", IO.OUTPUT, indentLevel=2)
-    writer.addPortScalar("ReceiveLED", IO.OUTPUT, indentLevel=2)
+    if not minimal_ports:
+        writer.addPortScalar("ComActive", IO.OUTPUT, indentLevel=2)
+        writer.addPortScalar("ReceiveLED", IO.OUTPUT, indentLevel=2)
     writer.addPortScalar("s_clk", IO.INPUT, indentLevel=2)
     writer.addPortScalar("s_data", IO.INPUT, indentLevel=2)
     writer.addPortEnd()
@@ -256,6 +263,17 @@ def generateTopWrapper(writer: CodeGenerator, fabric: Fabric) -> None:
     else:
         serial_ports = [("Rx", "Rx")]
         serial_params = []
+    # The parallel port has priority-muxed access to ConfigFSM while the adapters
+    # are idle, so without a driver its inputs must be tied off, never left open.
+    if minimal_ports:
+        status_ports = [("ComActive", ""), ("ReceiveLED", "")]
+        parallel_ports = [("SelfWriteData", "32'b0"), ("SelfWriteStrobe", "1'b0")]
+    else:
+        status_ports = [("ComActive", "ComActive"), ("ReceiveLED", "ReceiveLED")]
+        parallel_ports = [
+            ("SelfWriteData", "SelfWriteData"),
+            ("SelfWriteStrobe", "SelfWriteStrobe"),
+        ]
     writer.addNewLine()
     writer.addInstantiation(
         compName="eFPGA_Config",
@@ -264,12 +282,10 @@ def generateTopWrapper(writer: CodeGenerator, fabric: Fabric) -> None:
             ("CLK", "CLK"),
             ("resetn", "resetn"),
             *serial_ports,
-            ("ComActive", "ComActive"),
-            ("ReceiveLED", "ReceiveLED"),
+            *status_ports,
             ("s_clk", "s_clk"),
             ("s_data", "s_data"),
-            ("SelfWriteData", "SelfWriteData"),
-            ("SelfWriteStrobe", "SelfWriteStrobe"),
+            *parallel_ports,
             ("ConfigWriteData", "LocalWriteData"),
             ("ConfigWriteStrobe", "LocalWriteStrobe"),
             ("FrameAddressRegister", "FrameAddressRegister"),

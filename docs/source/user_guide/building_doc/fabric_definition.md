@@ -245,9 +245,13 @@ It is planned to remove these limitations in future versions of FABulous.
     The row select is 5 bits wide. Row IDs start at 1 and all-ones (31) means "no row", so a fabric can configure at most 30 rows. Wrapper and bitstream-spec generation reject larger configured-row counts. This permits up to 30 total rows when borders are included, or 32 total rows when configuration-free borders are excluded. The limit applies to both ordinary and q-out-of-n frame-strobe encoding.
     :::
 
+  - `MinimalConfigPorts`, `[TRUE|FALSE]` (default: `FALSE`)
+
+    Reduces the configuration pins of `eFPGA_top` for designs short on pads. `SelfWriteData` and `SelfWriteStrobe` are removed and tied to `0` inside the top wrapper, and the `ComActive` and `ReceiveLED` outputs are removed. Configuration then only works over the serial adapter and bitbang. Only available for Verilog projects.
+
   - `ConfigInterface`, `[UART|SPI]` (default `UART`)
 
-    Serial configuration port of the top wrapper. `UART` gives `eFPGA_top` the `Rx` input; `SPI` replaces it with `SPI_SCLK`, `SPI_CS_N` and `SPI_MOSI` inputs and an `SPI_MISO` output, and passes `ConfigInterface("SPI")` to `eFPGA_Config`, which then instantiates `fabric_spi_receiver` instead of `config_UART`. `ComActive`, `ReceiveLED`, the bitbang and the parallel port are the same in both modes. SPI is only available for Verilog projects. Projects created before this option have a UART-only `eFPGA_Config.v`; copy the template's `eFPGA_Config.v` and `fabric_spi_receiver.v` into `Fabric/` before switching to `SPI`. See {ref}`fabric-configuration`.
+    Serial configuration port of the top wrapper. `UART` gives `eFPGA_top` the `Rx` input; `SPI` replaces it with `SPI_SCLK`, `SPI_CS_N` and `SPI_MOSI` inputs and an `SPI_MISO` output, and passes `ConfigInterface("SPI")` to `eFPGA_Config`, which then instantiates `fabric_spi_receiver` instead of `config_UART`. The bitbang and parallel ports are the same in both modes; `ComActive` and `ReceiveLED` follow the selected adapter (see {ref}`fabric-configuration`). SPI is only available for Verilog projects. Projects created before this option have a UART-only `eFPGA_Config.v`; copy the template's `eFPGA_Config.v` and `fabric_spi_receiver.v` into `Fabric/` before switching to `SPI`. See {ref}`fabric-configuration`.
 
     :::{note}
     The selection is written into the generated `eFPGA_top.v` as a fixed `ConfigInterface` value on the `eFPGA_Config` instance, not as a parameter of `eFPGA_top`, so any flow that synthesises `eFPGA_top` picks it up automatically. Always synthesise the configuration logic through `eFPGA_top`: synthesising `eFPGA_Config` on its own (as its own top or macro) ignores the selection and silently builds the `UART` default.

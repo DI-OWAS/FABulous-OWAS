@@ -110,6 +110,36 @@ def test_serial_config_ports(
     assert spi_param is (config_interface == ConfigInterface.SPI)
 
 
+def test_minimal_config_ports(tmp_path: Path) -> None:
+    """The dropped ports leave the top, and the parallel inputs are tied low."""
+    fabric = _fabric(ConfigInterface.SPI)
+    fabric.minimal_config_ports = True
+    writer = VerilogCodeGenerator()
+    writer.outFileName = tmp_path / "eFPGA_top.v"
+    generateTopWrapper(writer, fabric)
+    rtl = writer.outFileName.read_text()
+
+    top = _top_ports(rtl)
+    for port in ["SelfWriteStrobe", "SelfWriteData", "ComActive", "ReceiveLED"]:
+        assert port not in top
+    for port in [*SPI_PORTS, "s_clk", "s_data"]:
+        assert port in top
+    assert ".SelfWriteStrobe(1'b0)" in rtl
+    assert ".SelfWriteData(32'b0)" in rtl
+    assert ".ComActive()" in rtl
+    assert ".ReceiveLED()" in rtl
+
+
+def test_minimal_config_ports_rejects_vhdl(tmp_path: Path) -> None:
+    """Tie-offs are written as Verilog literals, so VHDL is refused early."""
+    fabric = _fabric(ConfigInterface.UART)
+    fabric.minimal_config_ports = True
+    writer = VHDLCodeGenerator()
+    writer.outFileName = tmp_path / "eFPGA_top.vhdl"
+    with pytest.raises(InvalidFabricParameter, match="MinimalConfigPorts"):
+        generateTopWrapper(writer, fabric)
+
+
 def test_spi_rejects_vhdl(tmp_path: Path) -> None:
     """The VHDL `eFPGA_Config` has no SPI receiver, so SPI is refused early."""
     writer = VHDLCodeGenerator()

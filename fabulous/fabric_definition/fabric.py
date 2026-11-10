@@ -80,6 +80,9 @@ class Fabric:
         Whether the top and bottom rows get configuration frames. Default False.
     config_interface : ConfigInterface
         Serial configuration ports of the top wrapper. Default UART.
+    minimal_config_ports : bool
+        Whether the top wrapper drops the parallel configuration port (tied off
+        inside) and the `ComActive` and `ReceiveLED` outputs. Default False.
     syncHeaderHex : str
         Hex string of the 20-byte sync header written at the start of every
         binary bitstream.
@@ -126,6 +129,7 @@ class Fabric:
     multiClkDomains: bool = False
     includeBorderRows: bool = False
     config_interface: ConfigInterface = ConfigInterface.UART
+    minimal_config_ports: bool = False
     syncHeaderHex: str = "00AAFF01000000010000000000000000FAB0FAB1"
 
     tileDic: dict[str, Tile] = field(default_factory=dict)
@@ -505,6 +509,7 @@ class Fabric:
         fabric += f"multiClkDomains: {self.multiClkDomains}\n"
         fabric += f"includeBorderRows: {self.includeBorderRows}\n"
         fabric += f"config_interface: {self.config_interface}\n"
+        fabric += f"minimal_config_ports: {self.minimal_config_ports}\n"
         fabric += f"tileDic: {list(self.tileDic.keys())}\n"
         return fabric
 

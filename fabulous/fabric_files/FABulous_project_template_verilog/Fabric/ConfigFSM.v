@@ -13,7 +13,10 @@ module ConfigFSM #(
     input wire fsm_reset,
     output reg [FrameBitsPerRow-1:0] frame_address_register,
     output reg long_frame_strobe,
-    output reg [RowSelectWidth-1:0] row_select
+    output reg [RowSelectWidth-1:0] row_select,
+    // High while the last word written was an end-of-bitstream (desync) word
+    // in header position, i.e. a whole bitstream arrived in frame alignment
+    output reg config_done
 );
 
     reg frame_strobe;
@@ -33,6 +36,7 @@ module ConfigFSM #(
             row_index <= 5'b00000;
             frame_address_register <= 0;
             frame_strobe <= 1'b0;
+            config_done <= 1'b0;
         end else begin
             old_reset <= fsm_reset;
             frame_strobe <= 1'b0;
@@ -42,7 +46,14 @@ module ConfigFSM #(
             if ((old_reset == 1'b0) && (fsm_reset == 1'b1)) begin
                 state <= UNSYNCED;
                 row_index <= 0;
+                config_done <= 1'b0;
             end else begin
+                if (write_strobe == 1'b1) begin
+                    // Any word after the desync word clears it again, so a
+                    // misaligned stream that only looks like one does not
+                    // end up reporting done
+                    config_done <= (state == SYNC_HEADER) && write_data[desync_flag];
+                end
 
                 case (state)
                     UNSYNCED: begin

@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Verilog port of fabric_spi_receiver.sv from greyhound-ihp-v2
-// (ip/fabric_config), logic unchanged.
+// (ip/fabric_config). One change: the bit counter restarts while CS is
+// released, so an aborted transfer cannot misalign the words of the next.
 //
 // Waits until 4 bytes have been received over SPI, then writes the 32 bit
 // word to bitstream_data_o and pulses bitstream_valid_o. MOSI is sampled on
 // the falling SCLK edge with SCLK idling low, MSB first (SPI mode 1, as
-// greyhound's testbench drives it). The bit counter is not reset by CS, so
-// a host must only send whole 32 bit words.
+// greyhound's testbench drives it). A partial word left when CS is
+// released is dropped, so a host must send whole 32 bit words per transfer.
 
 `default_nettype none
 
@@ -74,7 +75,9 @@ module fabric_spi_receiver (
         end else begin
             bitstream_valid_o <= 1'b0;
 
-            if (enable_i && !cs_n_sync && spi_sclk_falling) begin
+            if (cs_n_sync) begin
+                shift_cnt <= 5'b0;
+            end else if (enable_i && spi_sclk_falling) begin
                 shift_register <= {shift_register[30:0], mosi_sync};
                 shift_cnt      <= shift_cnt + 1'b1;
 
