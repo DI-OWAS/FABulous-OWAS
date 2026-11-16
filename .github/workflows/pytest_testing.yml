@@ -58,7 +58,8 @@ jobs:
 
   pytest_testing:
     needs: restore_test_durations
-    runs-on: ubuntu-latest
+    # ghdl/setup-ghdl reads its OS matrix from the GHDL release inventory.json; v6.0.0 has no Ubuntu 26.04 build.
+    runs-on: ubuntu-24.04
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     strategy:
