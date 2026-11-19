@@ -53,6 +53,7 @@ from fabulous.fabric_generator.gds_generator.gen_io_pin_config_yaml import (
 )
 from fabulous.fabric_generator.gds_generator.helper import start_flow
 from fabulous.fabric_generator.gds_generator.steps.tile_area_opt import OptMode
+from fabulous.fabric_generator.gen_fabric import gen_emulation_netlist
 from fabulous.fabric_generator.gen_fabric.fabric_automation import genIOBel
 from fabulous.fabric_generator.gen_fabric.gen_configmem import (
     generate_super_tile_config_mem,
@@ -424,6 +425,35 @@ class FABulous_API:
         Using 'generateTopWrapper' defined in 'fabric_gen.py'.
         """
         generateTopWrapper(self.writer, self.fabric)
+
+    def gen_emulation_netlist(
+        self,
+        project_dir: Path,
+        bitstream_vh: Path,
+        netlist_path: Path,
+        top_name: str | None = None,
+    ) -> None:
+        """Fold the generated fabric under an emulation bitstream into a netlist.
+
+        Parameters
+        ----------
+        project_dir : Path
+            The FABulous project directory holding the generated RTL.
+        bitstream_vh : Path
+            The emulation bitstream defines written by `bit_gen`.
+        netlist_path : Path
+            Output Verilog netlist.
+        top_name : str | None, optional
+            The module to fold, by default `<fabric name>_top`.
+        """
+        rtl_files = gen_emulation_netlist.collect_fabric_rtl(self.fabric, project_dir)
+        gen_emulation_netlist.gen_emulation_netlist(
+            rtl_files,
+            bitstream_vh,
+            netlist_path,
+            top_name=top_name or f"{self.fabric.name}_top",
+            fabric_name=self.fabric.name,
+        )
 
     def genBitStreamSpec(self) -> dict:
         """Generate the bitstream specification object.

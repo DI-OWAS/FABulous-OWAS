@@ -385,6 +385,48 @@ class UserDesignCommandSet(ReplCommandSet):
         )
 
     @with_annotated
+    def do_gen_emulation_netlist(
+        self,
+        bitstream_vh: Annotated[
+            Path,
+            Argument(help_text="Emulation bitstream (`.vh`) written by bit_gen."),
+        ],
+        output: Annotated[
+            Path | None,
+            Option(
+                "-o",
+                "--output",
+                help_text=(
+                    "Output netlist (default: <bitstream_vh stem>_emulation.v "
+                    "next to the `.vh`)."
+                ),
+            ),
+        ] = None,
+        top: Annotated[
+            str | None,
+            Option(
+                "--top",
+                help_text="Module to fold (default: <fabric name>_top).",
+            ),
+        ] = None,
+    ) -> None:
+        """Fold the fabric under an emulation bitstream into a flat netlist.
+
+        The netlist replaces the fabric top module, e.g. on a commercial FPGA.
+        """
+        repl = self._cmd
+        if not repl.fabric_loaded:
+            raise CommandError("Need to load fabric first")
+        if repl.extension != "v":
+            raise CommandError("Emulation netlists need a Verilog fabric.")
+        netlist_path = output or bitstream_vh.with_name(
+            f"{bitstream_vh.stem}_emulation.v"
+        )
+        repl.fabulousAPI.gen_emulation_netlist(
+            get_context().proj_dir, bitstream_vh, netlist_path, top
+        )
+
+    @with_annotated
     def do_compile_design(
         self,
         files: Annotated[list[Path], Argument(help_text="Path to the target files.")],

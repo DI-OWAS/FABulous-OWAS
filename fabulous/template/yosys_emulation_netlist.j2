@@ -1,0 +1,24 @@
+read_verilog -sv -DEMULATION "{{ bitstream_vh }}"{% for rtl_file in rtl_files %} "{{ rtl_file }}"{% endfor %}
+
+hierarchy -check -top {{ top_name }}
+proc
+# Fold tile by tile first: one global flatten of the unconfigured fabric needs
+# several times the memory.
+# Mark the tile modules instantiated by the fabric, so flatten keeps them.
+setattr -mod -set keep_hierarchy 1 {{ fabric_name }}/t:* %M
+# A wrong fabric name would mark nothing and silently flatten globally.
+select -assert-min 1 A:keep_hierarchy
+# Flatten into each tile and fold its constant configuration.
+flatten
+opt -full
+opt_clean -purge
+# Then flatten the folded tiles and fold across tile borders.
+setattr -mod -unset keep_hierarchy
+flatten
+opt -full
+opt_clean -purge
+# Fail if a combinational loop or config storage (latches) survived the fold.
+scc -expect 0
+select -assert-none t:$dlatch t:$adlatch t:$dlatchsr t:$sr
+tee -o "{{ stat_path }}" stat
+write_verilog -noattr "{{ netlist_path }}"
