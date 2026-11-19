@@ -257,6 +257,12 @@ def generateFabric(writer: CodeGenerator, fabric: Fabric) -> None:
             )
 
     instantiatedPosition = []
+    # If the border rows are included, they should also get a
+    # `Tile_X{i}Y{j}_Emulate_Bitstream` emulation define
+    if fabric.includeBorderRows:
+        emulatedRows = range(fabric.numberOfRows)
+    else:
+        emulatedRows = range(1, fabric.numberOfRows - 1)
     # Tile instantiations
     for y, row in enumerate(fabric.tile):
         for x, tile in enumerate(row):
@@ -544,7 +550,7 @@ def generateFabric(writer: CodeGenerator, fabric: Fabric) -> None:
             if superTile:
                 name = superTile.name
                 for i, j in tileLocationOffset:
-                    if (y + j) not in (0, fabric.numberOfRows - 1):
+                    if (y + j) in emulatedRows:
                         emulateParamPairs.append(
                             (
                                 f"Tile_X{i}Y{j}_Emulate_Bitstream",
@@ -553,7 +559,7 @@ def generateFabric(writer: CodeGenerator, fabric: Fabric) -> None:
                         )
             else:
                 name = tile.name
-                if y not in (0, fabric.numberOfRows - 1):
+                if y in emulatedRows:
                     emulateParamPairs.append(
                         ("Emulate_Bitstream", f"`Tile_X{x}Y{y}_Emulate_Bitstream")
                     )

@@ -225,3 +225,74 @@ def test_user_clk_chains_from_side(
     ey = 1 + dy
     edge = rtl[rtl.index(f"Tile_X{ex}Y{ey}_T") :]
     assert ".UserCLK(UserCLK)" in edge[: edge.index(".UserCLKo(")]
+
+
+@pytest.mark.parametrize(
+    ("include_border_rows", "emulated_rows"), [(True, [0, 1, 2]), (False, [1])]
+)
+def test_emulate_bitstream_border_rows_follow_include_border_rows(
+    include_border_rows: bool,
+    emulated_rows: list[int],
+    mk_tile: Callable[[str], Tile],
+    code_generator_factory: Callable[[str, str], CodeGenerator],
+) -> None:
+    """Border-row tiles take the emulation bitstream iff border rows get frames.
+
+    bit_gen writes the `Tile_X*Y*_Emulate_Bitstream` defines for the top and
+    bottom rows only with IncludeBorderRows; without the parameter those tiles
+    would run with an all-zero config in EMULATION builds.
+    """
+    tile = mk_tile("T")
+    fabric = Fabric(
+        fabric_dir=tile.tileDir,
+        tile=[[tile] for _ in range(3)],
+        numberOfRows=3,
+        numberOfColumns=1,
+        includeBorderRows=include_border_rows,
+    )
+    writer = code_generator_factory(".v", "eFPGA")
+    generateFabric(writer, fabric)
+    rtl = writer.outFileName.read_text()
+
+    present = [y for y in range(3) if f"`Tile_X0Y{y}_Emulate_Bitstream" in rtl]
+    assert present == emulated_rows
+
+
+@pytest.mark.parametrize(
+    ("include_border_rows", "emulated_rows"), [(True, [0, 1, 2, 3]), (False, [1, 2])]
+)
+def test_emulate_bitstream_supertile_in_border_rows(
+    include_border_rows: bool,
+    emulated_rows: list[int],
+    tmp_path: Path,
+    code_generator_factory: Callable[[str, str], CodeGenerator],
+) -> None:
+    """Supertile sub-tiles in a border row follow IncludeBorderRows.
+
+    Two stacked DSP supertiles each span a border row and an interior row, so
+    the decision must be made per sub-tile row (anchor row plus offset), and
+    each sub-tile parameter `Tile_X0Y{j}_Emulate_Bitstream` must take the
+    define of its absolute fabric row.
+    """
+    supertile = _supertile(tmp_path)
+    top, bot = supertile.tiles
+    top.partOfSuperTile = True
+    bot.partOfSuperTile = True
+    fabric = Fabric(
+        fabric_dir=tmp_path,
+        tile=[[top], [bot], [top], [bot]],
+        numberOfRows=4,
+        numberOfColumns=1,
+        superTileDic={"DSP": supertile},
+        includeBorderRows=include_border_rows,
+    )
+    writer = code_generator_factory(".v", "eFPGA")
+    generateFabric(writer, fabric)
+    rtl = writer.outFileName.read_text()
+
+    present = [
+        y
+        for y in range(4)
+        if f".Tile_X0Y{y % 2}_Emulate_Bitstream(`Tile_X0Y{y}_Emulate_Bitstream)" in rtl
+    ]
+    assert present == emulated_rows
